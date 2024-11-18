@@ -27,7 +27,7 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true }, // Password will be hashed
 });
 
-const User = mongoose.model('User', UserSchema);
+const User = mongoose.model('users', UserSchema);
 
 // LOGIN endpoint to authenticate user
 app.post('/login', async (req, res) => {
@@ -65,24 +65,12 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Optionally, for user creation, you can hash the password before saving it
-app.post('/users', async (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res.status(400).json({ message: "Username and password are required" });
-  }
-
+// Fetch all users (GET request)
+app.get('/users', async (req, res) => {
   try {
-    // Hash password before saving to the database
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const newUser = new User({ username, password: hashedPassword });
-
-    const savedUser = await newUser.save();
-    res.status(201).json(savedUser);
+    const users = await User.find();  // Retrieve all users from the database
+    res.json(users);
   } catch (error) {
-    console.error(error);
-    res.status(400).json({ message: "Error creating user", error });
+    res.status(500).json({ message: "Error fetching users", error });
   }
 });
