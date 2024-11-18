@@ -1,8 +1,8 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const jwt = require('jsonwebtoken');  // Import JWT package
-const bcrypt = require('bcryptjs');  // Import bcrypt for password hashing
+const bcrypt = require('bcryptjs'); // Import bcryptjs
+const jwt = require('jsonwebtoken'); // Import jsonwebtoken
 
 const mongoDBUrl = "mongodb+srv://root:root@cluster0.pwr5n.mongodb.net/company?retryWrites=true&w=majority&appName=Cluster0";
 
@@ -25,57 +25,75 @@ mongoose.connect(mongoDBUrl).then(() => {
 const UserSchema = new mongoose.Schema({
   username: String,
   role: String,
-  password: String,  // Store hashed password, not plain text
+  password: String, // Password will be hashed
 });
 
 const User = mongoose.model('User', UserSchema);
 
-// API endpoint to create a new user (for registration purposes)
-app.post('/users', async (req, res) => {
+// API endpoint to get all users (optional)
+app.get('/users', async (req, res) => {
   try {
-    // Hash the password before saving
-    const hashedPassword = await bcrypt.hash(req.body.password, 10);
-    const newUser = new User({
-      username: req.body.username,
-      password: hashedPassword,
-      role: req.body.role,
-    });
-    const savedUser = await newUser.save();
-    res.status(201).json(savedUser);
+    const users = await User.find();
+    res.json(users);
   } catch (error) {
-    res.status(400).json({ message: "Error creating user", error });
+    res.status(500).json({ message: "Error fetching users", error });
   }
 });
 
-// Login endpoint to authenticate user
+// LOGIN endpoint to authenticate user
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
+  if (!username || !password) {
+    return res.status(400).json({ message: "Username and password are required" });
+  }
+
   try {
-    // Find the user by username
+    // Check if user exists
     const user = await User.findOne({ username });
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // Compare the provided password with the stored hashed password
+    // Compare the entered password with the hashed password in the database
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid password" });
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // If password matches, create a JWT token
+    // Generate JWT token
     const token = jwt.sign(
       { userId: user._id, username: user.username, role: user.role },
-      'your_jwt_secret_key',  // Secret key for signing the token
-      { expiresIn: '1h' }  // Token expiration time
+      "your_jwt_secret", // Use an environment variable for secret in production
+      { expiresIn: "1h" }
     );
 
-    // Return the token to the client
-    res.json({ token });
+    // Send response with token
+    res.json({ message: "Login successful", token });
   } catch (error) {
-    res.status(500).json({ message: "Error logging in", error });
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-// Your other endpoints (like /employees) remain the same...
+// Optionally, for user creation, you can hash the password before saving it
+app.post('/users', async (req, res) => {
+  const { username, password, role } = req.body;
+
+  if (!username || !password || !role) {
+    return res.status(400).json({ message: "Username, password, and role are required" });
+  }
+
+  try {
+    // Hash password before saving to the database
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = new User({ username, password: hashedPassword, role });
+
+    const savedUser = await newUser.save();
+    res.status(201).json(savedUser);
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ message: "Error creating user", error });
+  }
+});
