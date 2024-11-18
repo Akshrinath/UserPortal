@@ -21,24 +21,13 @@ mongoose.connect(mongoDBUrl).then(() => {
   console.error("Error connecting to MongoDB:", error);
 });
 
-// Define User schema and model
+// Define User schema and model (role removed)
 const UserSchema = new mongoose.Schema({
-  username: String,
-  role: String,
-  password: String, // Password will be hashed
+  username: { type: String, required: true },
+  password: { type: String, required: true }, // Password will be hashed
 });
 
 const User = mongoose.model('User', UserSchema);
-
-// API endpoint to get all users (optional)
-app.get('/users', async (req, res) => {
-  try {
-    const users = await User.find();
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ message: "Error fetching users", error });
-  }
-});
 
 // LOGIN endpoint to authenticate user
 app.post('/login', async (req, res) => {
@@ -61,9 +50,9 @@ app.post('/login', async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // Generate JWT token
+    // Generate JWT token (role is excluded here)
     const token = jwt.sign(
-      { userId: user._id, username: user.username, role: user.role },
+      { userId: user._id, username: user.username },
       "your_jwt_secret", // Use an environment variable for secret in production
       { expiresIn: "1h" }
     );
@@ -78,17 +67,17 @@ app.post('/login', async (req, res) => {
 
 // Optionally, for user creation, you can hash the password before saving it
 app.post('/users', async (req, res) => {
-  const { username, password, role } = req.body;
+  const { username, password } = req.body;
 
-  if (!username || !password || !role) {
-    return res.status(400).json({ message: "Username, password, and role are required" });
+  if (!username || !password) {
+    return res.status(400).json({ message: "Username and password are required" });
   }
 
   try {
     // Hash password before saving to the database
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = new User({ username, password: hashedPassword, role });
+    const newUser = new User({ username, password: hashedPassword });
 
     const savedUser = await newUser.save();
     res.status(201).json(savedUser);
