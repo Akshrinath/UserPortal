@@ -22,16 +22,17 @@ mongoose.connect(mongoDBUrl)
     console.error("Error connecting to MongoDB", err);
   });
 
-// Define User schema and model
+// Define User schema and model with a role field
 const UserSchema = new mongoose.Schema({
   username: { type: String, required: true },
   password: { type: String, required: true },
+  role: { type: String, required: true, enum: ['admin', 'manager', 'employee'], default: 'employee' }, // Added more roles
 });
 
 const User = mongoose.model('User', UserSchema);
 
 // POST login route
-app.post('/users', async (req, res) => {
+app.post('/login', async (req, res) => {
   const { username, password } = req.body;
 
   if (!username || !password) {
@@ -50,22 +51,59 @@ app.post('/users', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user._id, username: user.username },
-      "your_jwt_secret", // Store this in an environment variable
+      { userId: user._id, username: user.username, role: user.role }, // Including role in token
+      "your_jwt_secret", 
       { expiresIn: "1h" }
     );
 
-    res.json({ message: "Login successful", token });
+    res.json({ message: "Login successful", token, role: user.role }); // Send role in response
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Server error" });
   }
 });
 
+// Middleware to check user role
+const verifyRole = (roles) => {
+  return (req, res, next) => {
+    const token = req.headers['authorization'];
+
+    if (!token) {
+      return res.status(403).json({ message: "No token provided" });
+    }
+
+    jwt.verify(token, "your_jwt_secret", (err, decoded) => {
+      if (err) {
+        return res.status(403).json({ message: "Failed to authenticate token" });
+      }
+
+      if (!roles.includes(decoded.role)) {
+        return res.status(403).json({ message: "Access denied: Insufficient permissions" });
+      }
+
+      req.user = decoded;
+      next();
+    });
+  };
+};
+
+// Example of role-specific routes
+app.get('/admin', verifyRole(['admin']), (req, res) => {
+  res.json({ message: "Welcome Admin!" });
+});
+
+app.get('/manager', verifyRole(['manager', 'admin']), (req, res) => {
+  res.json({ message: "Welcome Manager!" });
+});
+
+app.get('/employee', verifyRole(['employee', 'manager', 'admin']), (req, res) => {
+  res.json({ message: "Welcome Employee!" });
+});
+
 // GET all users route (for testing, optional)
 app.get('/users', async (req, res) => {
   try {
-    const users = await User.find();  // Retrieve all users from the database
+    const users = await User.find();
     res.json(users);
   } catch (error) {
     res.status(500).json({ message: "Error fetching users", error });
